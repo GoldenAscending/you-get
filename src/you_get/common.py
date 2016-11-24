@@ -111,13 +111,17 @@ from urllib import request, parse, error
 from http import cookiejar
 from importlib import import_module
 
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import urllib
+from io import StringIO
+
 from .version import __version__
 from .util import log, term
 from .util.git import get_version
 from .util.strings import get_filename, unescape_html
 from . import json_output as json_output_
 
-dry_run = False
+dry_run = True
 json_output = False
 force = False
 player = None
@@ -958,7 +962,7 @@ def download_url_ffmpeg(url,title, ext,params={}, total_size=0, output_dir='.', 
     assert url
     if dry_run:
         print('Real URL:\n%s\n' % [url])
-        if params.get("-y",False): #None or unset ->False
+        if params is not None and params.get("-y",False): #None or unset ->False
             print('Real Playpath:\n%s\n' % [params.get("-y")])
         return
 
@@ -1043,12 +1047,6 @@ def print_info(site_info, title, type, size):
 
     else:
         type_info = "Unknown type (%s)" % type
-
-    maybe_print("Site:      ", site_info)
-    maybe_print("Title:     ", unescape_html(tr(title)))
-    print("Type:      ", type_info)
-    print("Size:      ", round(size / 1048576, 2), "MiB (" + str(size) + " Bytes)")
-    print()
 
 def mime_to_container(mime):
     mapping = {
@@ -1396,5 +1394,45 @@ def any_download_playlist(url, **kwargs):
     m, url = url_to_module(url)
     m.download_playlist(url, **kwargs)
 
+class S(BaseHTTPRequestHandler):
+    def _set_headers(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_GET(self):
+        self._set_headers()
+        qs = urllib.parse.urlparse(self.path).query;
+        q = urllib.parse.parse_qs(qs);
+        url = ''.join(q['origin'])
+        stdout_ = sys.stdout
+        stream = StringIO()
+        sys.stdout = stream
+        if url.startswith('https://'):
+            url = url[8:]
+        if not url.startswith('http://'):
+            url = 'http://' + url
+			
+        any_download(url)
+        sys.stdout = stdout_
+        result = stream.getvalue()
+              
+        self.wfile.write(bytes(result, 'UTF-8'))
+
+    def do_HEAD(self):
+        self._set_headers()
+        
+    def do_POST(self):
+        # Doesn't do anything with posted data
+        self._set_headers()
+        self.wfile.write(bytes("<html><body><h1>POST!</h1></body></html>"))
+        
+def run_server(server_class=HTTPServer, handler_class=S, port=80):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class)
+    print('Starting httpd...')
+    httpd.serve_forever()
+	
 def main(**kwargs):
-    script_main('you-get', any_download, any_download_playlist, **kwargs)
+	run_server()
+    #script_main('you-get', any_download, any_download_playlist, **kwargs)
