@@ -1388,7 +1388,7 @@ def url_to_module(url):
 
 def any_download(url, **kwargs):
     m, url = url_to_module(url)
-    m.download(url, **kwargs)
+    return m.download(url, **kwargs)
 
 def any_download_playlist(url, **kwargs):
     m, url = url_to_module(url)
@@ -1405,18 +1405,12 @@ class S(BaseHTTPRequestHandler):
         qs = urllib.parse.urlparse(self.path).query;
         q = urllib.parse.parse_qs(qs);
         url = ''.join(q['origin'])
-        stdout_ = sys.stdout
-        stream = StringIO()
-        sys.stdout = stream
         if url.startswith('https://'):
             url = url[8:]
         if not url.startswith('http://'):
             url = 'http://' + url
-			
-        any_download(url)
-        sys.stdout = stdout_
-        result = stream.getvalue()
-              
+		 
+        result = any_download(url);
         self.wfile.write(bytes(result, 'UTF-8'))
 
     def do_HEAD(self):
